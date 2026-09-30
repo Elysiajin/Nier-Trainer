@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstring>
 #include <mutex>
+#include <tlhelp32.h>
+#include <vector>
 #include <array>
 #include <unordered_map>
 
@@ -246,15 +248,67 @@ namespace nier::game
         return g_proj;
     }
 
+    namespace
+    {
+        // 挂 hook 前挂起其他线程，防止 inline hook 补丁落在正在执行该函数的线程脚下
+        class ThreadSuspension
+        {
+        public:
+            ThreadSuspension() noexcept
+            {
+                const DWORD current = ::GetCurrentThreadId();
+                HANDLE snap = ::CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+                if (snap == INVALID_HANDLE_VALUE)
+                    return;
+                THREADENTRY32 te{};
+                te.dwSize = sizeof(te);
+                if (::Thread32First(snap, &te))
+                {
+                    do
+                    {
+                        if (te.th32OwnerProcessID != ::GetCurrentProcessId()
+                            || te.th32ThreadID == current)
+                            continue;
+                        HANDLE t = ::OpenThread(THREAD_SUSPEND_RESUME, FALSE, te.th32ThreadID);
+                        if (t)
+                        {
+                            if (::SuspendThread(t) != static_cast<DWORD>(-1))
+                                m_threads.push_back(t);
+                            else
+                                ::CloseHandle(t);
+                        }
+                    } while (::Thread32Next(snap, &te));
+                }
+                ::CloseHandle(snap);
+            }
+
+            ~ThreadSuspension()
+            {
+                for (HANDLE t : m_threads)
+                {
+                    ::ResumeThread(t);
+                    ::CloseHandle(t);
+                }
+            }
+
+            ThreadSuspension(const ThreadSuspension&) = delete;
+            ThreadSuspension& operator=(const ThreadSuspension&) = delete;
+
+        private:
+            std::vector<HANDLE> m_threads;
+        };
+    }
+
     bool InstallContextHooks(ID3D11DeviceContext* context) noexcept
     {
         if (!context)
             return false;
         void** vtbl = *reinterpret_cast<void***>(context);
-        if (MH_CreateHook(vtbl[kVtMap], reinterpret_cast<void*>(&HookMap),
+        ThreadSuspension suspend; // RAII：构造挂起全部线程，析构恢复
+        if (MH_CreateHook(vtbl[kVtMap], reinterpret_cast<void**>(&HookMap),
                           reinterpret_cast<void**>(&RealMap)) != MH_OK)
             return false;
-        if (MH_CreateHook(vtbl[kVtUnmap], reinterpret_cast<void*>(&HookUnmap),
+        if (MH_CreateHook(vtbl[kVtUnmap], reinterpret_cast<void**>(&HookUnmap),
                           reinterpret_cast<void**>(&RealUnmap)) != MH_OK)
             return false;
         return MH_EnableHook(vtbl[kVtMap]) == MH_OK

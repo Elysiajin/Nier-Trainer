@@ -7,6 +7,7 @@
 #include "Offsets.h"
 #include "Structs.h"
 
+#include <mutex>
 #include <optional>
 #include <span>
 #include <vector>
@@ -74,6 +75,9 @@ namespace nier::game
     private:
         [[nodiscard]] EntityKind Classify(const EntityBase* entity) const noexcept;
 
+        // Present/Render 线程会 Refresh，Map/Unmap 捕获线程会 IsNearAnyEntity，
+        // m_entries 的重建与读取都必须持锁
+        mutable std::mutex m_entriesMutex;
         std::vector<EntitySnapshot> m_entries;
         std::ptrdiff_t m_projOffset{ -1 }; // 相对相机对象的偏移，-1 未定位
     };

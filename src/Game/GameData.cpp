@@ -123,7 +123,8 @@ namespace nier::game
     // ============================================================
     std::span<const EntitySnapshot> EntityCache::Refresh()
     {
-        m_entries.clear();
+        std::vector<EntitySnapshot> fresh;
+        fresh.reserve(m_entries.size());
 
         const u8* base = BaseAddress();
         if (!base)
@@ -139,8 +140,8 @@ namespace nier::game
         if (!table || bound == 0)
             return {};
 
-        const u32 tableSize = std::min<u64>(bound, offsets::kEntityTableCount);
-        m_entries.reserve(std::min<u64>(tableSize, 1024));
+        const u32 tableSize = static_cast<u32>((std::min<u64>)(bound, offsets::kEntityTableCount));
+        fresh.reserve((std::min<u64>)(tableSize, 1024));
 
         for (u32 i = 0; i < tableSize; ++i)
         {
@@ -164,9 +165,14 @@ namespace nier::game
 
             snapshot.pos = { worldOpt->m[3][0], worldOpt->m[3][1], worldOpt->m[3][2] };
 
-            m_entries.push_back(std::move(snapshot));
+            fresh.push_back(std::move(snapshot));
         }
 
+        {
+            std::lock_guard lock(m_entriesMutex);
+            m_entries.swap(fresh);
+        }
+        std::lock_guard lock(m_entriesMutex);
         return m_entries;
     }
 
@@ -208,6 +214,7 @@ namespace nier::game
 
     bool EntityCache::IsNearAnyEntity(const f32 pos[3], f32 radius) const noexcept
     {
+        std::lock_guard lock(m_entriesMutex);
         if (m_entries.empty())
             return false;
         const f32 r2 = radius * radius;
