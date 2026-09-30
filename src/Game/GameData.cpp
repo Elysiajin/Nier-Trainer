@@ -206,6 +206,22 @@ namespace nier::game
         }
     }
 
+    bool EntityCache::IsNearAnyEntity(const f32 pos[3], f32 radius) const noexcept
+    {
+        if (m_entries.empty())
+            return false;
+        const f32 r2 = radius * radius;
+        for (const auto& e : m_entries)
+        {
+            const f32 dx = e.pos.x - pos[0];
+            const f32 dy = e.pos.y - pos[1];
+            const f32 dz = e.pos.z - pos[2];
+            if (dx * dx + dy * dy + dz * dz <= r2)
+                return true;
+        }
+        return false;
+    }
+
     std::optional<Matrix44> EntityCache::TryFetchProjection()
     {
         const u8* base = BaseAddress();

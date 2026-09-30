@@ -62,6 +62,7 @@ add_library(NieRBase SHARED
     src/Menu.cpp
     src/imgui_style.cpp
     src/Game/GameData.cpp
+    src/Game/Capture.cpp
     src/Game/Esp.cpp
 )
 

@@ -64,11 +64,12 @@ namespace nier::game
         // 读取失败或含 NaN/Inf 返回 nullopt。
         [[nodiscard]] std::optional<Matrix44> TryFetchCameraMatrix();
 
-        // 在相机对象内存中按 D3D 透视矩阵指纹扫描真实投影矩阵：
-        //   m[0][3]==0 && m[1][3]==0 && |m[2][3]|==1 && m[3][3]==0
-        //   && m[0][0]>0 && m[1][1]>0 && m[0][1]==m[1][0]==0
-        // 命中后缓存偏移，之后每帧只做廉价校验，失效才重扫。
+        // 在相机对象内存中按 D3D 透视矩阵指纹扫描真实投影矩阵（备用路径）
         [[nodiscard]] std::optional<Matrix44> TryFetchProjection();
+
+        // 坐标是否落在任一已知实体附近（世界矩阵甄别用：
+        // 物体世界矩阵的平移就是实体坐标，相机视图矩阵不在实体坐标上）
+        [[nodiscard]] bool IsNearAnyEntity(const f32 pos[3], f32 radius) const noexcept;
 
     private:
         [[nodiscard]] EntityKind Classify(const EntityBase* entity) const noexcept;

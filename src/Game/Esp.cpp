@@ -1,5 +1,7 @@
 #include "Esp.h"
 
+#include "Capture.h"
+
 #include <imgui.h>
 
 #include <cmath>
@@ -118,11 +120,9 @@ namespace nier::esp
         if (!config.enabled)
             return;
 
-        const auto view = cache.TryFetchCameraMatrix();
-        if (!view)
-            return;
-
-        const auto proj = cache.TryFetchProjection();
+        const auto view = game::GetCapturedView();
+        const auto proj = game::GetCapturedProj();
+        const auto counters = game::GetCaptureCounters();
 
         const auto entities = cache.Refresh();
 
@@ -140,14 +140,14 @@ namespace nier::esp
 
             char debug[128];
             std::snprintf(debug, sizeof(debug),
-                          "ESP: U:%d P:%d E:%d | proj:%s",
+                          "ESP: U:%d P:%d E:%d | hook V:%u Pr:%u bufs:%u",
                           perKind[0], perKind[1], perKind[2],
-                          proj ? "ok" : "MISS");
+                          counters.views, counters.projs, counters.buffers);
             drawList->AddText(ImVec2(12.0f, 40.0f), IM_COL32(120, 255, 120, 255), debug);
         }
 
-        if (!proj)
-            return; // 找不到真实投影矩阵宁可不画，也不画错
+        if (!view || !proj)
+            return; // 尚未截获视图/投影矩阵，宁可不画
 
         const f32 maxDistanceSq = config.maxDistance * config.maxDistance;
 
