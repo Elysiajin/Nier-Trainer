@@ -189,4 +189,54 @@ namespace nier::game
 
         return matrixOpt;
     }
+
+    namespace
+    {
+        // D3D 透视矩阵指纹（行向量约定，LH: m[2][3]=+1 / RH: m[2][3]=-1）
+        bool LooksLikeProjection(const game::Matrix44& m) noexcept
+        {
+            const auto& a = m.m;
+            return std::isfinite(a[0][0]) && a[0][0] > 0.0f
+                && std::isfinite(a[1][1]) && a[1][1] > 0.0f
+                && a[0][1] == 0.0f && a[0][2] == 0.0f && a[0][3] == 0.0f
+                && a[1][0] == 0.0f && a[1][2] == 0.0f && a[1][3] == 0.0f
+                && a[3][0] == 0.0f && a[3][1] == 0.0f && a[3][3] == 0.0f
+                && (a[2][3] == 1.0f || a[2][3] == -1.0f)
+                && std::isfinite(a[2][2]) && std::isfinite(a[3][2]);
+        }
+    }
+
+    std::optional<Matrix44> EntityCache::TryFetchProjection()
+    {
+        const u8* base = BaseAddress();
+        if (!base)
+            return std::nullopt;
+
+        const auto* camera = reinterpret_cast<const u8*>(base + offsets::kCameraGame);
+
+        // 缓存命中：廉价校验
+        if (m_projOffset >= 0)
+        {
+            const auto m = TryLoad<Matrix44>(camera + m_projOffset);
+            if (m && LooksLikeProjection(m.value()))
+                return m;
+            m_projOffset = -1; // 失效，重扫
+        }
+
+        // 扫描范围：相机对象本体 + 前后各一段 .data
+        constexpr std::ptrdiff_t kBefore = 0x4000;
+        constexpr std::ptrdiff_t kAfter = 0x8C20 + 0x10000;
+        const auto* start = camera - kBefore;
+
+        for (std::ptrdiff_t off = 0; off + sizeof(Matrix44) <= kAfter + kBefore; off += sizeof(f32))
+        {
+            const auto m = TryLoad<Matrix44>(start + off);
+            if (m && LooksLikeProjection(m.value()))
+            {
+                m_projOffset = off - kBefore;
+                return m;
+            }
+        }
+        return std::nullopt;
+    }
 }
