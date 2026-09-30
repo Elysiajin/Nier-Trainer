@@ -109,23 +109,22 @@ namespace nier::esp
             return;
 
         const auto entities = cache.Refresh();
-        if (entities.empty())
-            return;
 
         ImDrawList* drawList = ImGui::GetBackgroundDrawList();
         const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-        const f32 maxDistanceSq = config.maxDistance * config.maxDistance;
 
+        if (config.showDebug)
+        {
+            char debug[96];
+            std::snprintf(debug, sizeof(debug), "ESP: %zu entities, matrix %s",
+                          entities.size(), matrix->AllFinite() ? "ok" : "bad");
+            drawList->AddText(ImVec2(12.0f, 40.0f), IM_COL32(120, 255, 120, 255), debug);
+        }
+
+        // 注：距离粗筛暂缺——视图矩阵的 row3 不是相机位置，
+        //     用它会误杀远处实体；W2S 本身会剔除屏幕外目标
         for (const auto& snapshot : entities)
         {
-            // 距离粗筛：裁剪前用相机矩阵 row3 近似相机位置
-            const auto& m = matrix->m;
-            const f32 dx = snapshot.pos.x - m[3][0];
-            const f32 dy = snapshot.pos.y - m[3][1];
-            const f32 dz = snapshot.pos.z - m[3][2];
-            if (dx * dx + dy * dy + dz * dz > maxDistanceSq)
-                continue;
-
             const auto screen = WorldToScreen(snapshot.pos, matrix.value(), displaySize);
             if (screen)
                 DrawEntity(drawList, snapshot, screen.value());

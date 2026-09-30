@@ -175,6 +175,7 @@ namespace NieRBase
                         ImGui::Checkbox("显示方框 ", &nier::esp::config.showBox);
                         ImGui::Checkbox("显示距离 ", &nier::esp::config.showDistance);
                         ImGui::Checkbox("显示连线 ", &nier::esp::config.showSnapline);
+                        ImGui::Checkbox("调试信息 ", &nier::esp::config.showDebug);
                         ImGui::SliderFloat("最大距离 ", &nier::esp::config.maxDistance, 50.0f, 1000.0f, "%.0f m");
                         ImGui::EndDisabled();
 

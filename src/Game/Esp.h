@@ -16,6 +16,7 @@ namespace nier::esp
         bool showBox{ true };
         bool showDistance{ true };
         bool showSnapline{ false };
+        bool showDebug{ true };      // 左上角调试行（验证完关掉）
         f32 maxDistance{ 500.0f };   // 米（按引擎单位≈米假设，待运行时标定）
     };
 

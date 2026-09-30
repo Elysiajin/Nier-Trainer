@@ -2,6 +2,8 @@
 
 #include <windows.h>
 #include <cstring>
+#include <array>
+#include <string_view>
 
 namespace nier::game
 {
@@ -75,7 +77,8 @@ namespace nier::game
     }
 
     // ============================================================
-    // 实体分类：比对 vftable
+    // 实体分类：走 RTTI（vftable[-1] → COL → type descriptor 名字）。
+    // 实体都是派生类（Em0XXX 等），不能直接和基类 vftable 比对。
     // ============================================================
     EntityKind EntityCache::Classify(const EntityBase* entity) const noexcept
     {
@@ -83,14 +86,34 @@ namespace nier::game
         if (!base || !entity)
             return EntityKind::Unknown;
 
+        // vftable 指针本身
         const auto vftableOpt = TryLoad<void*>(entity);
         if (!vftableOpt)
             return EntityKind::Unknown;
+        const auto* vftable = static_cast<const void* const*>(vftableOpt.value());
 
-        const auto vftable = reinterpret_cast<std::uintptr_t>(vftableOpt.value());
-        if (vftable == reinterpret_cast<std::uintptr_t>(base + offsets::kVftablePl0000))
+        // vftable[-1] = CompleteObjectLocator
+        const auto colOpt = TryLoad<const void*>(vftable - 1);
+        if (!colOpt)
+            return EntityKind::Unknown;
+        const auto* col = static_cast<const u8*>(colOpt.value());
+
+        // x64 COL：+0x0C = TypeDescriptor RVA
+        const auto tdRvaOpt = TryLoad<u32>(col + 0x0C);
+        if (!tdRvaOpt)
+            return EntityKind::Unknown;
+
+        // TypeDescriptor +0x10 = 类型名字符串 ".?AVEm0200@@"
+        const auto* tdName = base + std::ptrdiff_t(tdRvaOpt.value()) + 0x10;
+        std::array<char, 64> name{};
+        if (!SafeLoad(name.data(), tdName, name.size() - 1))
+            return EntityKind::Unknown;
+        name[name.size() - 1] = static_cast<char>(0);
+
+        std::string_view view{ name.data() };
+        if (view.find("Pl0000") != std::string_view::npos)
             return EntityKind::Player;
-        if (vftable == reinterpret_cast<std::uintptr_t>(base + offsets::kVftableEmBase))
+        if (view.find(".?AVEm") != std::string_view::npos)
             return EntityKind::Enemy;
         return EntityKind::Unknown;
     }
@@ -141,9 +164,6 @@ namespace nier::game
 
             snapshot.pos = { worldOpt->m[3][0], worldOpt->m[3][1], worldOpt->m[3][2] };
 
-            if (snapshot.kind == EntityKind::Unknown)
-                continue; // 未分类实体先不上屏，减少噪声
-
             m_entries.push_back(std::move(snapshot));
         }
 
@@ -160,11 +180,8 @@ namespace nier::game
         if (!base)
             return std::nullopt;
 
-        const auto cameraOpt = TryLoad<CameraGame*>(base + offsets::kCameraGame);
-        if (!cameraOpt || !cameraOpt.value())
-            return std::nullopt;
-
-        const auto* camera = cameraOpt.value();
+        // kCameraGame 是内嵌全局对象的地址本身，不是指针
+        const auto* camera = reinterpret_cast<const CameraGame*>(base + offsets::kCameraGame);
         const auto matrixOpt = TryLoad<Matrix44>(
             reinterpret_cast<const u8*>(camera) + offsets::kCameraMatrix);
         if (!matrixOpt || !matrixOpt->AllFinite())
