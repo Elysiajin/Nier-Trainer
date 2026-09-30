@@ -2,6 +2,7 @@
 #include "Engine.h"
 #include "fonts.h"
 #include "imgui_style.h"
+#include "Game/Esp.h"
 #include <string>
 #include <imgui.h>
 
@@ -167,10 +168,19 @@ namespace NieRBase
                     {
                     case 0: // 功能
                     {
-                        ColoredSeparatorText("占位功能", SciFi::Accent);
-                        ImGui::TextColored(SciFi::TextDim, "DX11 窗口注入已生效，Present hook 工作正常。");
-                        
+                        ColoredSeparatorText("ESP 透视", SciFi::Accent);
                         ImGui::Spacing();
+                        ImGui::Checkbox("启用 ESP ", &nier::esp::config.enabled);
+                        ImGui::BeginDisabled(!nier::esp::config.enabled);
+                        ImGui::Checkbox("显示方框 ", &nier::esp::config.showBox);
+                        ImGui::Checkbox("显示距离 ", &nier::esp::config.showDistance);
+                        ImGui::Checkbox("显示连线 ", &nier::esp::config.showSnapline);
+                        ImGui::SliderFloat("最大距离 ", &nier::esp::config.maxDistance, 50.0f, 1000.0f, "%.0f m");
+                        ImGui::EndDisabled();
+
+                        ImGui::Spacing();
+                        ColoredSeparatorText("说明", SciFi::TextDim);
+                        ImGui::TextColored(SciFi::TextDim, "相机矩阵语义未最终确认，若画面异常请先关 ESP。");
                         ImGui::TextColored(SciFi::TextDim, "按 INSERT 开关菜单");
                         break;
                     }

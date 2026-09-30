@@ -8,7 +8,7 @@ if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
     message(FATAL_ERROR "目标进程 NieRAutomata.exe 为 64 位，请使用 x64 工具链 (cmake -A x64)")
 endif()
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 11)
 
@@ -61,6 +61,8 @@ add_library(NieRBase SHARED
     src/Engine.cpp
     src/Menu.cpp
     src/imgui_style.cpp
+    src/Game/GameData.cpp
+    src/Game/Esp.cpp
 )
 
 target_include_directories(NieRBase PRIVATE src)

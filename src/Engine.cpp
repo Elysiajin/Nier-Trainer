@@ -3,6 +3,8 @@
 #include "Hooking.h"
 #include "fonts.h"
 #include "imgui_style.h"
+#include "Game/Esp.h"
+#include "Game/GameData.h"
 #include <cstdio>
 #include <imgui_impl_win32.h>
 #include <imgui_impl_dx11.h>
@@ -367,6 +369,9 @@ namespace NieRBase
             if (GetCapture() == g_Engine->pGameWindow)
                 ReleaseCapture();
         }
+
+        // 渲染 ESP（开关由 nier::esp::config.enabled 控制）
+        nier::esp::Render(nier::game::g_entityCache);
 
         // 渲染菜单
         Menu::Draw();
