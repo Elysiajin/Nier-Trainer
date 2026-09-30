@@ -9,39 +9,52 @@
 namespace nier::esp
 {
     using game::f32;
+
     namespace
     {
-        struct ScreenPos
+        // 视图空间坐标（世界 → 视图，行向量约定：v' = v * M）
+        struct ViewState
         {
-            ImVec2 pos;
-            f32 w{ 0.0f }; // 裁剪空间 w，用于按距离调透明度
+            f32 x{ 0.0f };
+            f32 y{ 0.0f };
+            f32 z{ 0.0f };   // 前向深度（符号取决于引擎左右手约定）
         };
 
-        // ----------------------------------------------------
-        // 世界到屏幕（行向量约定：clip = pos * M）
-        // ⚠ 当前矩阵源是 cCameraGame+0x10 候选（可能是视图矩阵而非
-        //   ViewProj），语义待运行时确认；确认后仅需替换矩阵来源。
-        // ----------------------------------------------------
-        std::optional<ScreenPos> WorldToScreen(const game::Vec3& world, const game::Matrix44& mat,
-                                               ImVec2 displaySize)
+        ViewState ToViewSpace(const game::Vec3& world, const game::Matrix44& mat)
         {
             const auto& m = mat.m;
-            const f32 clipX = world.x * m[0][0] + world.y * m[1][0] + world.z * m[2][0] + m[3][0];
-            const f32 clipY = world.x * m[0][1] + world.y * m[1][1] + world.z * m[2][1] + m[3][1];
-            const f32 clipW = world.x * m[0][3] + world.y * m[1][3] + world.z * m[2][3] + m[3][3];
+            return {
+                world.x * m[0][0] + world.y * m[1][0] + world.z * m[2][0] + m[3][0],
+                world.x * m[0][1] + world.y * m[1][1] + world.z * m[2][1] + m[3][1],
+                world.x * m[0][2] + world.y * m[1][2] + world.z * m[2][2] + m[3][2],
+            };
+        }
 
-            if (clipW < 0.001f || !std::isfinite(clipW))
-                return std::nullopt; // 在相机身后或退化
+        f32 FovScale(f32 fovDegrees)
+        {
+            return 1.0f / std::tan(fovDegrees * 3.14159265f / 360.0f); // 1/tan(fov/2)
+        }
 
-            const ImVec2 ndc{ clipX / clipW, clipY / clipW };
-            if (ndc.x < -1.2f || ndc.x > 1.2f || ndc.y < -1.2f || ndc.y > 1.2f)
-                return std::nullopt; // 屏幕外留 20% 余量避免边框抖动
+        // 用自建透视投影把视图空间投到屏幕。
+        // 引擎左右手约定未知：以"多数实体 z<0 则右手"逐帧自动判定，
+        // 判错时表现为画面左右镜像，调 rhOverride 可强制。
+        std::optional<ImVec2> Project(const ViewState& view, bool rhMode,
+                                      f32 fovScale, f32 aspect, ImVec2 displaySize)
+        {
+            const f32 depth = rhMode ? -view.z : view.z;
+            if (depth < 0.05f)
+                return std::nullopt; // 相机身后
 
-            ScreenPos out;
-            out.pos.x = (ndc.x * 0.5f + 0.5f) * displaySize.x;
-            out.pos.y = (1.0f - (ndc.y * 0.5f + 0.5f)) * displaySize.y;
-            out.w = clipW;
-            return out;
+            const f32 xScale = fovScale / aspect; // 水平
+            const f32 yScale = fovScale;          // 垂直
+
+            const f32 ndcX = view.x * xScale / depth;
+            const f32 ndcY = view.y * yScale / depth;
+            if (ndcX < -1.05f || ndcX > 1.05f || ndcY < -1.05f || ndcY > 1.05f)
+                return std::nullopt;
+
+            return ImVec2{ (ndcX * 0.5f + 0.5f) * displaySize.x,
+                           (1.0f - (ndcY * 0.5f + 0.5f)) * displaySize.y };
         }
 
         ImU32 KindColor(game::EntityKind kind)
@@ -50,7 +63,7 @@ namespace nier::esp
             {
             case game::EntityKind::Player: return IM_COL32( 90, 200, 255, 255); // 蓝
             case game::EntityKind::Enemy:  return IM_COL32(255,  80,  80, 255); // 红
-            default:                       return IM_COL32(200, 200, 200, 255);
+            default:                       return IM_COL32(200, 200, 200, 255); // 灰
             }
         }
 
@@ -64,37 +77,42 @@ namespace nier::esp
             }
         }
 
+        f32 KindHeight(game::EntityKind kind)
+        {
+            switch (kind)
+            {
+            case game::EntityKind::Player: return 1.6f;
+            case game::EntityKind::Enemy:  return 1.6f;
+            default:                       return 1.0f;
+            }
+        }
+
         void DrawEntity(ImDrawList* drawList, const game::EntitySnapshot& snapshot,
-                        const ScreenPos& screen)
+                        ImVec2 screen, f32 depth, f32 boxHeightPx)
         {
             const ImU32 color = KindColor(snapshot.kind);
 
-            // 以裁剪 w 估算投影半径（经验系数，运行时标定）
-            const f32 boxH = std::clamp(2200.0f / screen.w, 10.0f, 240.0f);
+            const f32 boxH = std::clamp(boxHeightPx, 8.0f, 400.0f);
             const f32 boxW = boxH * 0.45f;
-            const ImVec2 minS{ screen.pos.x - boxW * 0.5f, screen.pos.y - boxH };
-            const ImVec2 maxS{ screen.pos.x + boxW * 0.5f, screen.pos.y };
+            const ImVec2 minS{ screen.x - boxW * 0.5f, screen.y - boxH };
+            const ImVec2 maxS{ screen.x + boxW * 0.5f, screen.y };
 
             if (config.showBox)
                 drawList->AddRect(minS, maxS, color, 2.0f, 0, 1.4f);
 
             char label[32];
             if (config.showDistance)
-            {
-                const f32 distance = screen.w; // 裁剪 w 单调于深度，先作距离近似
-                std::snprintf(label, sizeof(label), "%s %.0fm", KindName(snapshot.kind), distance);
-            }
+                std::snprintf(label, sizeof(label), "%s %.0fm",
+                              KindName(snapshot.kind), depth);
             else
-            {
                 std::snprintf(label, sizeof(label), "%s", KindName(snapshot.kind));
-            }
             drawList->AddText(ImVec2(minS.x, minS.y - ImGui::GetTextLineHeight() - 2.0f),
                               color, label);
 
             if (config.showSnapline)
             {
                 const ImVec2& display = ImGui::GetIO().DisplaySize;
-                drawList->AddLine(ImVec2(display.x * 0.5f, display.y), screen.pos, color, 1.0f);
+                drawList->AddLine(ImVec2(display.x * 0.5f, display.y), screen, color, 1.0f);
             }
         }
     } // namespace
@@ -112,22 +130,51 @@ namespace nier::esp
 
         ImDrawList* drawList = ImGui::GetBackgroundDrawList();
         const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+        if (displaySize.x <= 0.0f || displaySize.y <= 0.0f)
+            return;
+
+        // ---- 逐帧自动判定左右手约定：多数实体 z<0 → 右手 ----
+        int zNegative = 0;
+        for (const auto& snapshot : entities)
+        {
+            const f32 z = ToViewSpace(snapshot.pos, matrix.value()).z;
+            (z < 0.0f) ? ++zNegative : --zNegative;
+        }
+        const bool rhMode = zNegative > 0;
+
+        const f32 fovScale = FovScale(config.fovDegrees);
+        const f32 aspect = displaySize.x / displaySize.y;
+        const f32 maxDistanceSq = config.maxDistance * config.maxDistance;
 
         if (config.showDebug)
         {
-            char debug[96];
-            std::snprintf(debug, sizeof(debug), "ESP: %zu entities, matrix %s",
-                          entities.size(), matrix->AllFinite() ? "ok" : "bad");
+            int perKind[3]{};
+            for (const auto& s : entities)
+                ++perKind[static_cast<int>(s.kind)];
+            char debug[128];
+            std::snprintf(debug, sizeof(debug),
+                          "ESP: P:%d E:%d U:%d | %s | fov %.0f",
+                          perKind[0], perKind[1], perKind[2],
+                          rhMode ? "RH" : "LH", config.fovDegrees);
             drawList->AddText(ImVec2(12.0f, 40.0f), IM_COL32(120, 255, 120, 255), debug);
         }
 
-        // 注：距离粗筛暂缺——视图矩阵的 row3 不是相机位置，
-        //     用它会误杀远处实体；W2S 本身会剔除屏幕外目标
         for (const auto& snapshot : entities)
         {
-            const auto screen = WorldToScreen(snapshot.pos, matrix.value(), displaySize);
+            const ViewState view = ToViewSpace(snapshot.pos, matrix.value());
+
+            const f32 distSq = view.x * view.x + view.y * view.y + view.z * view.z;
+            if (distSq > maxDistanceSq)
+                continue;
+
+            // 方框高度：实体真实高度 × 投影 ÷ 深度 × 半屏
+            const f32 depth = std::fabs(view.z);
+            const f32 boxHeightPx = KindHeight(snapshot.kind) * fovScale / depth
+                                    * 0.5f * displaySize.y;
+
+            auto screen = Project(view, rhMode, fovScale, aspect, displaySize);
             if (screen)
-                DrawEntity(drawList, snapshot, screen.value());
+                DrawEntity(drawList, snapshot, screen.value(), std::sqrt(distSq), boxHeightPx);
         }
     }
 }

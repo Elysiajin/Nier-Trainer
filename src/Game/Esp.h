@@ -17,7 +17,8 @@ namespace nier::esp
         bool showDistance{ true };
         bool showSnapline{ false };
         bool showDebug{ true };      // 左上角调试行（验证完关掉）
-        f32 maxDistance{ 500.0f };   // 米（按引擎单位≈米假设，待运行时标定）
+        f32 fovDegrees{ 55.0f };     // 垂直 FOV，调到方框贴合实体为准
+        f32 maxDistance{ 500.0f };   // 米（真实距离，视图空间求模）
     };
 
     // 全局配置（菜单直接绑定）
