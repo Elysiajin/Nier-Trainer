@@ -209,18 +209,36 @@ namespace nier::game
                 {
                     buf->GetDesc(&desc);
                     buf->Release();
-                    t_pending = Pending{ out->pData, desc.ByteWidth };
+                    if (desc.ByteWidth > 0)
+                        t_pending = Pending{ out->pData, desc.ByteWidth };
                 }
             }
             return hr;
+        }
+
+        // SEH 兜底：捕获路径的任何非法访问只跳过本次扫描，不带崩游戏
+        bool SafeScan(const void* data, std::size_t bytes, const void* baseAddr) noexcept
+        {
+            __try
+            {
+                ScanBuffer(data, bytes, baseAddr);
+                return true;
+            }
+            __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION
+                          ? EXCEPTION_EXECUTE_HANDLER
+                          : EXCEPTION_CONTINUE_SEARCH)
+            {
+                return false;
+            }
         }
 
         void STDMETHODCALLTYPE HookUnmap(ID3D11DeviceContext* ctx, ID3D11Resource* res)
         {
             if (t_pending.data)
             {
-                ScanBuffer(t_pending.data, t_pending.bytes, t_pending.data);
+                const Pending p = t_pending;
                 t_pending = Pending{};
+                SafeScan(p.data, p.bytes, p.data);
             }
             RealUnmap(ctx, res);
         }
@@ -311,7 +329,13 @@ namespace nier::game
         if (MH_CreateHook(vtbl[kVtUnmap], reinterpret_cast<void**>(&HookUnmap),
                           reinterpret_cast<void**>(&RealUnmap)) != MH_OK)
             return false;
-        return MH_EnableHook(vtbl[kVtMap]) == MH_OK
-            && MH_EnableHook(vtbl[kVtUnmap]) == MH_OK;
+        const bool ok = MH_EnableHook(vtbl[kVtMap]) == MH_OK
+                     && MH_EnableHook(vtbl[kVtUnmap]) == MH_OK;
+        if (!ok)
+        {
+            MH_RemoveHook(vtbl[kVtMap]);
+            MH_RemoveHook(vtbl[kVtUnmap]);
+        }
+        return ok;
     }
 }

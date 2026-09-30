@@ -1,4 +1,5 @@
 #include "Engine.h"
+#include "CrashLog.h"
 #include "Menu.h"
 #include <MinHook.h>
 #include <thread>
@@ -28,6 +29,8 @@ void ClientBGThread()
 DWORD WINAPI MainThread_Initialize(LPVOID dwModule)
 {
     HMODULE hSelf = static_cast<HMODULE>(dwModule);
+
+    NieRBase::InstallCrashLogger();
 
     g_Console = std::make_unique<Console>();
     g_Console->InitializeConsole("NieR Console", true);

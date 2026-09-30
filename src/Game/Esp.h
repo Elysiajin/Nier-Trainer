@@ -17,6 +17,7 @@ namespace nier::esp
         bool showDistance{ true };
         bool showSnapline{ false };
         bool showDebug{ true };      // 左上角调试行（验证完关掉）
+        bool captureEnabled{ false }; // 实验功能：Map/Unmap 矩阵截获，默认关闭
         f32 fovDegrees{ 55.0f };     // 垂直 FOV，调到方框贴合实体为准
         f32 maxDistance{ 500.0f };   // 米（真实距离，视图空间求模）
     };

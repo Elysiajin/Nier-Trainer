@@ -120,6 +120,9 @@ namespace nier::esp
         if (!config.enabled)
             return;
 
+        if (!config.captureEnabled)
+            return; // 实验截获未开启，无矩阵来源
+
         const auto view = game::GetCapturedView();
         const auto proj = game::GetCapturedProj();
         const auto counters = game::GetCaptureCounters();

@@ -61,6 +61,7 @@ add_library(NieRBase SHARED
     src/Engine.cpp
     src/Menu.cpp
     src/imgui_style.cpp
+    src/CrashLog.cpp
     src/Game/GameData.cpp
     src/Game/Capture.cpp
     src/Game/Esp.cpp
@@ -73,6 +74,7 @@ target_link_libraries(NieRBase PRIVATE
     MinHook
     d3d11
     dxgi
+    psapi
     d3dcompiler
     winmm
     xinput

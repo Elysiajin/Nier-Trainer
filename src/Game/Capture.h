@@ -25,6 +25,8 @@ namespace nier::game
     [[nodiscard]] std::optional<Matrix44> GetCapturedView() noexcept; // 统一为行向量约定
     [[nodiscard]] std::optional<Matrix44> GetCapturedProj() noexcept; // 统一为行向量约定
 
-    // 对 immediate context 的 Map/Unmap 挂 MinHook（vtable[14]/[15]）
+    // 对 immediate context 的 Map/Unmap 挂 MinHook（vtable[14]/[15]）。
+    // ⚠ 实验功能，默认不启用；运行时由菜单开关触发。
     [[nodiscard]] bool InstallContextHooks(ID3D11DeviceContext* context) noexcept;
+    void RemoveContextHooks() noexcept;
 }

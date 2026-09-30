@@ -5,7 +5,7 @@
 #include "imgui_style.h"
 #include "Game/Esp.h"
 #include "Game/GameData.h"
-#include "Game/Capture.h"
+
 #include <cstdio>
 #include <imgui_impl_win32.h>
 #include <imgui_impl_dx11.h>
@@ -290,9 +290,6 @@ namespace NieRBase
             ImGui_ImplWin32_Init(g_Engine->pGameWindow);
             ImGui_ImplDX11_Init(m_Device, m_DeviceContext);
 
-            // 截获游戏上传 GPU 的常量缓冲（视图/投影矩阵）
-            if (!nier::game::InstallContextHooks(m_DeviceContext))
-                LogFile("[6b] Map/Unmap hook install FAILED");
 
             // ===== 合并几何符号字形区间（● ◆ ■），否则这些图标会渲染成 '?' =====
             // BuildRanges 的结果必须存活到字体图集构建（首次 NewFrame），所以用 static

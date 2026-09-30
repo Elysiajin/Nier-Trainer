@@ -3,6 +3,7 @@
 #include "fonts.h"
 #include "imgui_style.h"
 #include "Game/Esp.h"
+#include "Game/Capture.h"
 #include <string>
 #include <imgui.h>
 
@@ -176,6 +177,14 @@ namespace NieRBase
                         ImGui::Checkbox("显示距离 ", &nier::esp::config.showDistance);
                         ImGui::Checkbox("显示连线 ", &nier::esp::config.showSnapline);
                         ImGui::Checkbox("调试信息 ", &nier::esp::config.showDebug);
+                        if (ImGui::Checkbox("实验：GPU 矩阵截获（崩溃请关闭） ",
+                                            &nier::esp::config.captureEnabled))
+                        {
+                            if (nier::esp::config.captureEnabled && g_D3D11Window
+                                && !nier::game::InstallContextHooks(
+                                    g_D3D11Window->GetDeviceContext()))
+                                nier::esp::config.captureEnabled = false;
+                        }
                         ImGui::SliderFloat("最大距离 ", &nier::esp::config.maxDistance, 50.0f, 1000.0f, "%.0f m");
                                                 ImGui::EndDisabled();
 

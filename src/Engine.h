@@ -116,6 +116,8 @@ namespace NieRBase
         WNDPROC m_OldWndProc{};
 
     public:
+        ID3D11DeviceContext* GetDeviceContext() const noexcept { return m_DeviceContext; }
+
         bool GetD3DContext();
         bool HookD3D();
         void UnhookD3D();
